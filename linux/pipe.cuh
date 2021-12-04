@@ -224,11 +224,13 @@ private:
 	cudnnConvolutionDescriptor_t convolution_descriptor;
 	cudnnConvolutionDescriptor_t convolution_descriptor2;
 	cudnnConvolutionDescriptor_t convolution_descriptor3;
-	cudnnConvolutionFwdAlgo_t convolution_algorithm, convolution_algorithm2, convolution_algorithm3;
 	size_t workspace_bytes = 0;
 	size_t workspace_bytes2 = 0;
 	size_t workspace_bytes3 = 0;
 	const float alpha = 1, beta = 0;
+	int ReqAlgoCnt = CUDNN_CONVOLUTION_FWD_ALGO_COUNT;
+	int RetAlgoCnt = -1;
+	cudnnConvolutionFwdAlgoPerf_t convolution_algorithm[2*CUDNN_CONVOLUTION_FWD_ALGO_COUNT], convolution_algorithm2[2*CUDNN_CONVOLUTION_FWD_ALGO_COUNT], convolution_algorithm3[2*CUDNN_CONVOLUTION_FWD_ALGO_COUNT];
 
 public:
 	cudaStream_t my_stream;
@@ -294,7 +296,7 @@ public:
 		cudaMalloc((void**)&d_out3, sizeof(float) * imgsize * 4);
 		cudaMalloc((void**)&d_out_YUV, imgsize * 6);
 
-		initw("/vapour/weight.sr");
+		initw("../weight.sr");
 
 		checkCUDNN(cudnnSetTensor4dDescriptor(input_descriptor,
 			/*format=*/CUDNN_TENSOR_NCHW,
@@ -403,53 +405,53 @@ public:
 
 
 		checkCUDNN(
-			cudnnGetConvolutionForwardAlgorithm_v7(cudnn,
+			cudnnFindConvolutionForwardAlgorithm(cudnn,
 				input_descriptor,
 				kernel_descriptor,
 				convolution_descriptor,
 				output_descriptor,
-				CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
-				/*memoryLimitInBytes=*/0,
-				&convolution_algorithm));
+				ReqAlgoCnt,
+				&RetAlgoCnt,
+				convolution_algorithm));
 		checkCUDNN(
-			cudnnGetConvolutionForwardAlgorithm_v7(cudnn,
+			cudnnFindConvolutionForwardAlgorithm(cudnn,
 				output_descriptor,
 				kernel_descriptor2,
 				convolution_descriptor2,
 				output_descriptor2,
-				CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
-				/*memoryLimitInBytes=*/0,
-				&convolution_algorithm2));
+				ReqAlgoCnt,
+				&RetAlgoCnt,
+				convolution_algorithm2));
 		checkCUDNN(
-			cudnnGetConvolutionForwardAlgorithm_v7(cudnn,
+			cudnnFindConvolutionForwardAlgorithm(cudnn,
 				output_descriptor2,
 				kernel_descriptor3,
 				convolution_descriptor3,
 				output_descriptor3,
-				CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
-				/*memoryLimitInBytes=*/0,
-				&convolution_algorithm3));
+				ReqAlgoCnt,
+				&RetAlgoCnt,
+				convolution_algorithm3));
 
 		checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(cudnn,
 			input_descriptor,
 			kernel_descriptor,
 			convolution_descriptor,
 			output_descriptor,
-			convolution_algorithm,
+			convolution_algorithm[0].algo,
 			&workspace_bytes));
 		checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(cudnn,
 			output_descriptor,
 			kernel_descriptor2,
 			convolution_descriptor2,
 			output_descriptor2,
-			convolution_algorithm2,
+			convolution_algorithm2[0].algo,
 			&workspace_bytes2));
 		checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(cudnn,
 			output_descriptor2,
 			kernel_descriptor3,
 			convolution_descriptor3,
 			output_descriptor3,
-			convolution_algorithm3,
+			convolution_algorithm3[0].algo,
 			&workspace_bytes3));
 
 		cudaMalloc((void **)&d_workspace, workspace_bytes);
@@ -492,7 +494,7 @@ public:
 			kernel_descriptor,
 			d_w1,
 			convolution_descriptor,
-			convolution_algorithm,
+			convolution_algorithm[0].algo,
 			d_workspace,
 			workspace_bytes,
 			&beta,
@@ -510,7 +512,7 @@ public:
 			kernel_descriptor2,
 			d_w2,
 			convolution_descriptor2,
-			convolution_algorithm2,
+			convolution_algorithm2[0].algo,
 			d_workspace2,
 			workspace_bytes2,
 			&beta,
@@ -528,7 +530,7 @@ public:
 			kernel_descriptor3,
 			d_w3,
 			convolution_descriptor3,
-			convolution_algorithm3,
+			convolution_algorithm3[0].algo,
 			d_workspace3,
 			workspace_bytes3,
 			&beta,
